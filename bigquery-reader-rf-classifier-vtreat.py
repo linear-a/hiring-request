@@ -204,6 +204,19 @@ dmap = {'True': 1, 'False': 0}
 labels = targets.map(dmap).fillna(1)
 print (labels.value_counts())
 
+variables.drop(
+    columns=['POST_PD_x',
+             'POST_PD_y',
+             'join',
+             'ICCE',
+             'PROVIDER_NAME',
+             'GENDER',
+             'NPI'],
+    axis=0,
+    inplace=True
+    )
+print (variables.columns.values)
+
 ## Split into Test/Train
 train_features, test_features, train_labels, test_labels = train_test_split(variables, labels, test_size = 0.25, random_state = 42)
 
@@ -245,6 +258,7 @@ model = fitter.fit(
     )
 
 test_processed = plan.transform(test_features)
+print (test_processed)
 pf_train = pd.DataFrame({'TARGET':train_labels})
 pf_train['pred'] = model.predict_proba(cross_sparse)[:, 1]
 wvpy.util.plot_roc(pf_train['pred'], pf_train['TARGET'], title='Model on Train')
@@ -256,9 +270,10 @@ wvpy.util.plot_roc(pf['pred'], pf['TARGET'], title='Model on Test')
 
 ## Precision, Recall and F1
 print(model_eval_functions.classification_eval(model, test_sparse, test_labels, cross_sparse, train_labels))
+print (test_processed.columns)
 
 ## Evaluate
-dt_feature_importances = pd.DataFrame(tree_fit.feature_importances_,
-                                   index = train_features.columns,
+dt_feature_importances = pd.DataFrame(model.feature_importances_,
+                                   index = test_processed.columns,
                                     columns=['importance']).sort_values('importance', ascending=False)
 print (dt_feature_importances)
