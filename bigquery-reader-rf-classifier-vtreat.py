@@ -21,6 +21,7 @@ import wvpy.util
 
 ## Import Classifiers
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import roc_auc_score
 import xgboost as xg
@@ -29,15 +30,12 @@ import skopt
 ## Test/Train Split
 from sklearn.model_selection import train_test_split
 
-## Set JSON Credentials;lo
-credentials = 'g:/shared drives/sds/security/gcs/lineara-io-222305ef4e49.json'
-
 ## Set Project
 project_name = 'musc-lineara'
 dataset_name = 'SMP_FINAL'
 
 ## Set BigQuery Client
-bq_client = bigquery.Client.from_service_account_json(credentials)
+bq_client = bigquery.Client()
 
 ## Standard SQL
 sql = """
@@ -102,11 +100,23 @@ for y in years:
 bq_post_pd = [item for sublist in post for item in sublist]
 print (bq_post_pd)
 depts = list(df.ICCE.unique())
-depts.extend(['No ICCE Attribution', 'UNKNOWN', 'Interdisciplinary Hospital Staff', 'Regional Health Network'])
+depts.extend(
+    ['No ICCE Attribution',
+     'UNKNOWN',
+     'Interdisciplinary Hospital Staff',
+     'Regional Health Network']
+    )
 
-d_df = pd.DataFrame(depts, columns=['ICCE'])
+d_df = pd.DataFrame(
+    depts,
+    columns=['ICCE']
+    )
 
-m_df = pd.DataFrame(bq_post_pd, columns=['POST_PD'], dtype='str')
+m_df = pd.DataFrame(
+    bq_post_pd,
+    columns=['POST_PD'],
+    dtype='str'
+    )
 
 def cross_join(left, right):
     return (
@@ -119,6 +129,7 @@ result = pd.merge(cj_df,
                  df,
                  on=['POST_PD','ICCE'], 
                  how='left')
+
 print (result.TARGET.value_counts())
 result['join'] = result.POST_PD.astype('int')
 print (result)
@@ -150,7 +161,15 @@ WITH
     COALESCE(SAFE_CAST(POSSIBLE_SCHEDULED_APPTS AS FLOAT64),
       0.0) AS POSSIBLE_SCHEDULED_APPTS,
     COALESCE(SAFE_CAST(SLOTS_AVAILABLE AS FLOAT64),
-      0.0) AS SLOTS_AVAILABLE
+      0.0) AS SLOTS_AVAILABLE,
+    SAFE_DIVIDE(COALESCE(SAFE_CAST(COMPLETED_APPTS AS FLOAT64),
+      0.0),
+    (COALESCE(SAFE_CAST(POSSIBLE_SCHEDULED_APPTS AS FLOAT64),
+      0.0))) AS PERCENTAGE_COMPLETED_APPTS_AVAILABLE,
+    SAFE_DIVIDE(COALESCE(SAFE_CAST(COMPLETED_APPTS AS FLOAT64),
+      0.0),
+    (COALESCE(SAFE_CAST(SLOTS_AVAILABLE AS FLOAT64),
+      0.0))) AS PERCENTAGE_COMPLETED_SLOTS_AVAILABLE
   FROM
     `musc-lineara.musc.PROVIDER_PRODUCTIVITY_2`)
 SELECT
@@ -191,13 +210,17 @@ output = pd.merge(
                  on=['join','ICCE'], 
                  how='left'
                  )
-
+output.sort_values(
+    inplace=True,
+    by='POST_PD_y',
+    na_position='first'
+    )
+print (output.columns.values)
 variables = output.loc[:, output.columns != 'TARGET']
 print (variables)
 targets = output['TARGET'].fillna('False')
 print (targets)
 n = variables.shape[0]
-targets.value_counts()
 
 ## Convert
 dmap = {'True': 1, 'False': 0}
@@ -211,69 +234,106 @@ variables.drop(
              'ICCE',
              'PROVIDER_NAME',
              'GENDER',
-             'NPI'],
+             'NPI',
+             'PROVIDER_REPORTING_SPECIALTY',
+             'PROVIDER_SPECIALTY'],
     axis=0,
     inplace=True
     )
 print (variables.columns.values)
 
-## Split into Test/Train
-train_features, test_features, train_labels, test_labels = train_test_split(variables, labels, test_size = 0.25, random_state = 42)
+## Data Prep for Train
+plan = vt.BinomialOutcomeTreatment(
+    outcome_target=True,
+    params = vt.vtreat_parameters({
+        'filter_to_recommended': False,
+        'sparse_indicators': False
+    }
+    ))
 
-plan = vt.BinomialOutcomeTreatment(outcome_target=True)
 cross_frame = plan.fit_transform(
+    variables,
+    labels
+    )
+cross_frame.dtypes
+cross_frame.shape
+print (cross_frame)
+## Split into Test/Train
+train_features, test_features, train_labels, test_labels = train_test_split(cross_frame, labels, test_size = 0.2, random_state = 42, shuffle=True)
+model_vars = np.asarray(plan.score_frame_['variable'][plan.score_frame_['recommended']])
+
+rf = xg.XGBClassifier(
+    objective='binary:logistic'
+    )
+
+opt = skopt.BayesSearchCV(
+    rf,
+    {
+        "max_depth": (2, 4),
+        "n_estimators": (10, 100),
+        "booster": ['gbtree', 'gblinear', 'dart']
+    },
+    n_iter=100,
+    cv=4,
+    scoring='f1',
+    n_jobs=6
+)
+
+opt.fit(
+    train_features,
+    train_labels
+    )
+print("val. score: %s" % opt.best_score_)
+
+tree_mdl = opt.best_estimator_
+
+## Fit Best Estimator
+tree_fit = tree_mdl.fit(
     train_features,
     train_labels
     )
 
-model_vars = np.asarray(plan.score_frame_['variable'][plan.score_frame_['recommended']])
-len(model_vars)
-cross_frame.dtypes
+## Classification predictions
+rf_predictions = tree_fit.predict(train_features)
 
-cross_sparse = sc.sparse.hstack([sc.sparse.csc_matrix(cross_frame[[vi]]) for vi in model_vars])
+## Probabilities for AUC
+rf_probs = tree_fit.predict_proba(train_features)[:, 1]
 
-fd = xg.DMatrix(
-    data=cross_sparse, 
-    label=train_labels)
-
-x_parameters = {'max_depth':4,
-                'objective':'binary:logistic'}
-
-cv = xg.cv(
-    x_parameters,
-    fd,
-    num_boost_round=100,
-    verbose_eval=False
+## ROC AUC
+roc_value = roc_auc_score(
+    train_labels,
+    rf_probs
     )
+print (roc_value)
 
-fitter = xg.XGBClassifier(
-    n_estimators=200,
-    max_depth=5,
-    objective='binary:logistic'
-    )
-
-model = fitter.fit(
-    cross_sparse,
+## Precision, Recall and F1
+print(model_eval_functions.classification_eval(
+    tree_mdl,
+    test_features,
+    test_labels,
+    train_features,
     train_labels
-    )
+    ))
+
+## Evaluate
+dt_feature_importances = pd.DataFrame(
+    tree_fit.feature_importances_,
+    index = train_features.columns,
+    columns=['importance']
+    ).sort_values(
+        'importance',
+        ascending=False
+        )
+print (dt_feature_importances)
 
 test_processed = plan.transform(test_features)
 print (test_processed)
+
 pf_train = pd.DataFrame({'TARGET':train_labels})
-pf_train['pred'] = model.predict_proba(cross_sparse)[:, 1]
+pf_train['pred'] = model.predict_proba(train_features)[:, 1]
 wvpy.util.plot_roc(pf_train['pred'], pf_train['TARGET'], title='Model on Train')
 
 test_sparse = sc.sparse.hstack([sc.sparse.csc_matrix(test_processed[[vi]]) for vi in model_vars])
 pf = pd.DataFrame({'TARGET':test_labels})
-pf['pred'] = model.predict_proba(test_sparse)[:, 1]
+pf['pred'] = model.predict_proba(test_features)[:, 1]
 wvpy.util.plot_roc(pf['pred'], pf['TARGET'], title='Model on Test')
-
-## Precision, Recall and F1
-print(model_eval_functions.classification_eval(model, test_sparse, test_labels, cross_sparse, train_labels))
-print (test_processed.columns)
-
-## Evaluate
-dt_feature_importances = pd.DataFrame(model.feature_importances_,
-                                   index = test_processed.columns,
-                                    columns=['importance']).sort_values('importance', ascending=False)
-print (dt_feature_importances)
