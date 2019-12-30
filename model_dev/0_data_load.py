@@ -81,7 +81,12 @@ prov_df = pd.read_gbq(
 )
 prov_df.columns = map(str.lower, prov_df.columns)
 
-npi_df = npi_pull(df=prov_df)
+# npi_df = npi_pull(df=prov_df)
+npi_df = pd.read_csv(
+    './model_dev/dev_assets/data/md_api_output.csv.gz',
+    compression='gzip'
+)
+print(npi_df.shape)
 
 prov_df = pd.merge(
     prov_df,
@@ -90,6 +95,33 @@ prov_df = pd.merge(
     how='left'
 )
 
+prov_count = prov_df.groupby(['icce', 'post_pd']).size().reset_index()
+prov_count.columns = ['icce', 'post_pd', 'num_providers']
+
+prov_group = prov_df.groupby(['icce', 'post_pd']).agg({
+    'provider_clinical_fte': ['mean', 'sum'],
+    'wrvus': ['mean', 'sum'],
+    'uhcwrvus': ['mean', 'sum'],
+    'new_patient_appts_14_days': ['mean', 'sum'],
+    'new_patient_appts_scheduled': ['mean', 'sum'],
+    'new_patient_appts_total_lag': ['mean', 'sum'],
+    'completed_appts': ['mean', 'sum'],
+    'possible_scheduled_appts': ['mean', 'sum'],
+    'slots_available': ['mean', 'sum'],
+    'percentage_completed_appts_available': ['mean', 'sum'],
+    'percentage_completed_slots_available': ['mean', 'sum']
+}).reset_index()
+
+prov_group.columns = ["_".join(x) for x in prov_group.columns.ravel()]
+prov_group.rename(columns={'icce_': 'icce', 'post_pd_': 'post_pd'}, inplace=True)
+
+
+prov_df_final = pd.merge(
+    prov_count,
+    prov_group,
+    on=['icce', 'post_pd'],
+    how='left'
+)
 ## provider df needs to become single line per post_pd + icce before merging
 
 
