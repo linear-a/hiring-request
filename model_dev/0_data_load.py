@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from model_dev.dev_assets.sql import base_sql, prov_sql
+from model_dev.dev_assets.npi import npi_pull
 
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.max_rows', 500)
@@ -20,7 +21,6 @@ df = pd.read_gbq(
 
 print(df.shape)
 print(df.head())
-
 
 years = range(2017, 2020, 1)
 months = range(1, 13, 1)
@@ -73,4 +73,28 @@ df = pd.merge(
 
 df.loc[:, 'target'].fillna(0, inplace=True)
 print(df.target.value_counts())
+df.loc[:, 'post_pd'] = df.loc[:, 'post_pd'].astype(int)
 
+prov_df = pd.read_gbq(
+    prov_sql,
+    project_id=project_name,
+    dialect='standard'
+)
+prov_df.columns = map(str.lower, prov_df.columns)
+
+npi_df = npi_pull(df=prov_df)
+
+prov_df = pd.merge(
+    prov_df,
+    npi_df,
+    on='npi',
+    how='left'
+)
+
+
+df = pd.merge(
+    df,
+    prov_df,
+    on=['post_pd', 'icce'],
+    how='left'
+)
