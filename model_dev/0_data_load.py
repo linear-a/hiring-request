@@ -60,7 +60,6 @@ m_df = pd.DataFrame(
     dtype='str'
 )
 
-
 cj_df = cross_join(d_df, m_df)
 print(cj_df)
 
@@ -90,6 +89,12 @@ prov_df = pd.merge(
     on='npi',
     how='left'
 )
+
+## provider df needs to become single line per post_pd + icce before merging
+
+
+
+
 
 
 df = pd.merge(

@@ -2,15 +2,15 @@ base_sql = """
 WITH
   COUNTS AS (
   SELECT
-    DATE(DATE_CREATED) AS DATE,
+    DATE(DATE_CREATED) AS date,
     CAST(FORMAT("%02d",(EXTRACT(MONTH
           FROM
-            DATE(DATE_CREATED)))) AS STRING) AS MONTH,
+            DATE(DATE_CREATED)))) AS STRING) AS month,
     CAST(EXTRACT(YEAR
       FROM
-        DATE(DATE_CREATED)) AS STRING) AS YEAR,
-    ICCE,
-    COUNT(REPLACEMENT) AS REPLACEMENT_CNTS
+        DATE(DATE_CREATED)) AS STRING) AS year,
+    icce,
+    COUNT(REPLACEMENT) AS replacement_counts
   FROM
     `musc-lineara.musc.custom_recruitment`
   GROUP BY
@@ -25,7 +25,8 @@ SELECT
   CONCAT(YEAR, MONTH) AS post_pd,
   1 AS target
 FROM
-  COUNTS WHERE ICCE IS NOT NULL
+  COUNTS 
+WHERE ICCE IS NOT NULL
 GROUP BY
   ICCE,
   POST_PD
