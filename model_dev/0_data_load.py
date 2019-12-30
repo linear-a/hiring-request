@@ -7,6 +7,11 @@ pd.set_option('display.max_rows', 500)
 
 project_name = 'musc-lineara'
 
+
+def cross_join(left, right):
+    return (left.assign(key=1).merge(right.assign(key=1), on='key').drop('key', 1))
+
+
 df = pd.read_gbq(
     base_sql,
     project_id=project_name,
@@ -23,8 +28,8 @@ m_fill = []
 for m in months:
     x = "{:02d}".format(m)
     m_fill.append(x)
-print (list(m_fill))
-print (list(years))
+print(list(m_fill))
+print(list(years))
 
 post = []
 for y in years:
@@ -35,39 +40,37 @@ for y in years:
         post_pd.append(x)
     post.append(post_pd)
 bq_post_pd = [item for sublist in post for item in sublist]
-print (bq_post_pd)
-depts = list(df.ICCE.unique())
-depts.extend(
-    ['No ICCE Attribution',
-     'UNKNOWN',
-     'Interdisciplinary Hospital Staff',
-     'Regional Health Network']
-    )
+print(bq_post_pd)
+depts = list(df.icce.unique())
+depts.extend([
+    'No ICCE Attribution',
+    'UNKNOWN',
+    'Interdisciplinary Hospital Staff',
+    'Regional Health Network'
+])
 
 d_df = pd.DataFrame(
     depts,
-    columns=['ICCE']
-    )
+    columns=['icce']
+)
 
 m_df = pd.DataFrame(
     bq_post_pd,
-    columns=['POST_PD'],
+    columns=['post_pd'],
     dtype='str'
-    )
+)
 
-def cross_join(left, right):
-    return (
-       left.assign(key=1).merge(right.assign(key=1), on='key').drop('key', 1))
 
 cj_df = cross_join(d_df, m_df)
-print (cj_df)
+print(cj_df)
 
-result = pd.merge(cj_df,
-                 df,
-                 on=['POST_PD','ICCE'],
-                 how='left')
+df = pd.merge(
+    cj_df,
+    df,
+    on=['post_pd', 'icce'],
+    how='left'
+)
 
-print (result.TARGET.value_counts())
-result['join'] = result.POST_PD.astype('int')
-print (result)
-print (result.TARGET.fillna('False').value_counts())
+df.loc[:, 'target'].fillna(0, inplace=True)
+print(df.target.value_counts())
+
