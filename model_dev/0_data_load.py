@@ -95,43 +95,51 @@ prov_df = pd.merge(
     how='left'
 )
 
-prov_count = prov_df.groupby(['icce', 'post_pd']).size().reset_index()
-prov_count.columns = ['icce', 'post_pd', 'num_providers']
+prov_df.loc[:, 'is_sole_prop'] = np.where(prov_df.sole_proprietor == "YES", 1, 0)
+prov_df.loc[:, 'is_primary'] = np.where(prov_df.primary is True, 1, 0)
+prov_df.loc[:, 'is_male'] = np.where(prov_df.gender == "M", 1, 0)
 
 prov_group = prov_df.groupby(['icce', 'post_pd']).agg({
-    'provider_clinical_fte': ['mean', 'sum'],
-    'wrvus': ['mean', 'sum'],
-    'uhcwrvus': ['mean', 'sum'],
-    'new_patient_appts_14_days': ['mean', 'sum'],
-    'new_patient_appts_scheduled': ['mean', 'sum'],
-    'new_patient_appts_total_lag': ['mean', 'sum'],
-    'completed_appts': ['mean', 'sum'],
-    'possible_scheduled_appts': ['mean', 'sum'],
-    'slots_available': ['mean', 'sum'],
-    'percentage_completed_appts_available': ['mean', 'sum'],
-    'percentage_completed_slots_available': ['mean', 'sum']
+    'post_pd': ['count'],
+    'provider_clinical_fte': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'wrvus': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'uhcwrvus': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'new_patient_appts_14_days': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'new_patient_appts_scheduled': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'new_patient_appts_total_lag': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'completed_appts': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'possible_scheduled_appts': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'slots_available': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'percentage_completed_appts_available': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'percentage_completed_slots_available': ['mean', 'sum', 'min', 'max', 'median', 'std'],
+    'is_sole_prop': ['sum', 'mean'],
+    'is_primary': ['sum', 'mean'],
+    'is_male': ['sum', 'mean']
 }).reset_index()
 
 prov_group.columns = ["_".join(x) for x in prov_group.columns.ravel()]
 prov_group.rename(columns={'icce_': 'icce', 'post_pd_': 'post_pd'}, inplace=True)
 
-
-prov_df_final = pd.merge(
-    prov_count,
-    prov_group,
-    on=['icce', 'post_pd'],
-    how='left'
-)
-## provider df needs to become single line per post_pd + icce before merging
-
-
-
-
-
+print(prov_group.shape)
 
 df = pd.merge(
     df,
-    prov_df,
+    prov_group,
     on=['post_pd', 'icce'],
     how='left'
+)
+
+print(df.shape)
+print(df.head())
+
+## no data for 11/19 & 12/19
+df = df[df.post_pd < 201911]
+
+print(df.shape)
+print(sum(df.post_pd_count.isnull()))
+
+df.to_csv(
+    './model_dev/dev_assets/data/0_data_load.csv.gz',
+    compression='gzip',
+    index=False
 )
