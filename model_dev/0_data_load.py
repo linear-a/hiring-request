@@ -72,6 +72,10 @@ df = pd.merge(
 
 df.loc[:, 'target'].fillna(0, inplace=True)
 print(df.target.value_counts())
+df.loc[:, 'target_30'] = df.groupby(['icce'])['target'].shift(1)
+df.loc[:, 'target_60'] = df.groupby(['icce'])['target'].shift(2)
+df.loc[:, 'target_90'] = df.groupby(['icce'])['target'].shift(3)
+
 df.loc[:, 'post_pd'] = df.loc[:, 'post_pd'].astype(int)
 
 prov_df = pd.read_gbq(
