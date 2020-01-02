@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
-from model_dev.dev_assets.sql import base_sql, prov_sql
-from model_dev.dev_assets.npi import npi_pull
+from model_dev.dev_assets.scripts.sql import base_sql, prov_sql
 
 pd.set_option('display.max_columns', 500)
 pd.set_option('display.max_rows', 500)
@@ -10,7 +9,7 @@ project_name = 'musc-lineara'
 
 
 def cross_join(left, right):
-    return (left.assign(key=1).merge(right.assign(key=1), on='key').drop('key', 1))
+    return left.assign(key=1).merge(right.assign(key=1), on='key').drop('key', 1)
 
 
 df = pd.read_gbq(
