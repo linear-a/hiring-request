@@ -1,24 +1,8 @@
 import numpy as np
 import pandas as pd
-from sklearn.pipeline import Pipeline, FeatureUnion, make_pipeline, make_union
-from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
-from sklearn.preprocessing import FunctionTransformer, \
-    StandardScaler
-from sklearn.linear_model import LogisticRegressionCV, SGDClassifier,\
-    LogisticRegression
-from sklearn.ensemble import GradientBoostingClassifier, VotingClassifier
-from sklearn.metrics import log_loss, roc_curve, \
-    precision_recall_fscore_support, precision_score, recall_score, \
-    auc, roc_auc_score, average_precision_score, \
-    classification_report, zero_one_loss, make_scorer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegressionCV
 from sklearn import tree
-# from mlxtend.classifier import StackingCVClassifier, StackingClassifier
-from sklearn.externals import joblib
-from imblearn import under_sampling, over_sampling
-from imblearn.over_sampling import SMOTE
+from sklearn.metrics import log_loss, roc_curve, auc
 pd.set_option('max_columns', 500)
 
 df = pd.read_csv('./model_dev/dev_assets/data/1_clean_fe.csv.gz', compression = 'gzip')
