@@ -5,7 +5,7 @@ from sklearn import tree
 from sklearn.metrics import log_loss, roc_curve, auc
 pd.set_option('max_columns', 500)
 
-df = pd.read_csv('./model_dev/dev_assets/data/1_clean_fe.csv.gz', compression = 'gzip')
+df = pd.read_csv('./model_dev/dev_assets/data/1_clean_fe.csv.gz', compression='gzip')
 
 print(df.shape)
 print(df.target.mean())
